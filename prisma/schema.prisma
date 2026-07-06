@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @map("_id")
+  role      Role     @default(EMPLOYEE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+model Customer {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  phone     String   @unique
+  address   String?
+  bills     Bill[]
+  payments  CustomerPayment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Supplier {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  phone     String   @unique
+  address   String?
+  purchases Purchase[]
+  payments  SupplierPayment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Bill {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  invoiceNumber String   @unique
+  date          DateTime @default(now())
+  customerId    String   @db.ObjectId
+  customer      Customer @relation(fields: [customerId], references: [id])
+  items         BillItem[]
+  totalAmount   Float
+  discount      Float    @default(0)
+  paidAmount    Float
+  dueAmount     Float
+  status        BillStatus
+  payments      CustomerPayment[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+type BillItem {
+  productName String
+  quantity    Int
+  rate        Float
+  total       Float
+}
+
+enum BillStatus {
+  PAID
+  PARTIAL
+  UNPAID
+}
+
+model Purchase {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  date          DateTime @default(now())
+  supplierId    String   @db.ObjectId
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  items         PurchaseItem[]
+  totalAmount   Float
+  paidAmount    Float
+  dueAmount     Float
+  payments      SupplierPayment[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+type PurchaseItem {
+  productName String
+  quantity    Int
+  rate        Float
+  total       Float
+}
+
+model CustomerPayment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  date      DateTime @default(now())
+  amount    Float
+  customerId String  @db.ObjectId
+  customer  Customer @relation(fields: [customerId], references: [id])
+  billId    String?  @db.ObjectId
+  bill      Bill?    @relation(fields: [billId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SupplierPayment {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  date       DateTime @default(now())
+  amount     Float
+  supplierId String   @db.ObjectId
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  purchaseId String?  @db.ObjectId
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model ActivityLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  date      DateTime @default(now())
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  oldValue  String? 
+  newValue  String? 
+  createdAt DateTime @default(now())
+}
+
+model BusinessMetrics {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  totalSales   Float    @default(0)
+  totalPurchase Float   @default(0)
+  totalProfit  Float    @default(0)
+  totalExpenses Float   @default(0)
+  customerDue  Float    @default(0)
+  supplierDue  Float    @default(0)
+  currentCash  Float    @default(0)
+  updatedAt    DateTime @updatedAt
+}
+
+model WholesaleRecord {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  date          DateTime @default(now())
+  productName   String
+  quantity      Int
+  wholesaleRate Float
+  totalCost     Float
+  billId        String?  @db.ObjectId
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

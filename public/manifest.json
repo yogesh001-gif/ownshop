@@ -1,0 +1,16 @@
+{
+  "name": "OwnShop",
+  "short_name": "OwnShop",
+  "description": "Business Management Platform for Retailers",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
