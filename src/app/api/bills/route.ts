@@ -74,7 +74,7 @@ export async function POST(request: Request) {
         update: {},
         create: { name: item.productName }
       });
-      const qty = Math.max(1, Number(item.quantity) || 1);
+      const qty = Math.max(1, Math.round(Number(item.quantity) || 1));
       // Prefer frontend wholesaleRate if provided, otherwise fallback to product's recorded purchase price
       // @ts-ignore
       const purchaseRate = Number(item.wholesaleRate) || Number(product.currentPurchasePrice) || 0;

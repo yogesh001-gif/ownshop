@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
           paidAmount,
           dueAmount,
           items: (data.items || []).map((item: any) => {
-            const qty = Math.max(1, Number(item.quantity) || 1); // fallback to 1
+            const qty = Math.max(1, Math.round(Number(item.quantity) || 1)); // fallback to 1
             const rt = Number(item.rate) || 0;
             return {
               productName: String(item.productName || 'Unknown Product').trim(),
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
 
       // 2c. Update Products and Price History
       for (const item of (data.items || [])) {
-        const qty = Math.max(1, Number(item.quantity) || 1);
+        const qty = Math.max(1, Math.round(Number(item.quantity) || 1));
         const rt = Number(item.rate) || 0;
         const pName = String(item.productName || 'Unknown Product').trim();
 

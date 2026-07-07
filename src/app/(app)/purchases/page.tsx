@@ -73,7 +73,8 @@ export default function Purchases() {
       reset();
       setTimeout(() => setSuccess(false), 3000);
     } else {
-      alert("Failed to add purchase.");
+      const errData = await res.json().catch(() => ({}));
+      alert(`Failed to add purchase: ${errData.error || 'Unknown error'}`);
     }
     setLoading(false);
   };

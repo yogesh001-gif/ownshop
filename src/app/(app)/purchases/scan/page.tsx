@@ -62,15 +62,18 @@ export default function ScanInvoice() {
         body: JSON.stringify(ocrData),
       });
 
-      if (!res.ok) throw new Error("Failed to save purchase");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to save purchase");
+      }
       
       setStatus('success');
       // Redirect after 2s
       setTimeout(() => {
         window.location.href = '/purchases';
       }, 2000);
-    } catch (error) {
-      alert("Error saving. Please try again.");
+    } catch (error: any) {
+      alert(`Error saving: ${error.message}`);
       setSaving(false);
     }
   };

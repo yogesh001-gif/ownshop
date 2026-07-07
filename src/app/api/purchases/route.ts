@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
       // Update Products, Inventory, and Price History
       for (const item of (items || [])) {
-        const qty = Math.max(1, Number(item.quantity) || 1);
+        const qty = Math.max(1, Math.round(Number(item.quantity) || 1));
         const rt = Number(item.rate) || 0;
         const pName = String(item.productName || 'Unknown Product').trim();
 
@@ -125,7 +125,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(result, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to create purchase' }, { status: 500 });
+  } catch (error: any) {
+    console.error("Purchase Error:", error);
+    return NextResponse.json({ error: error.message || 'Failed to create purchase' }, { status: 500 });
   }
 }
