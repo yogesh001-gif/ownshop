@@ -33,10 +33,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Items are required' }, { status: 400 });
     }
 
-    const dueAmount = totalAmount - discount - paidAmount;
+    const totalAmt = Number(totalAmount) || 0;
+    const disc = Number(discount) || 0;
+    const paidAmt = Number(paidAmount) || 0;
+    const dueAmt = totalAmt - disc - paidAmt;
     let status: BillStatus = 'UNPAID';
-    if (dueAmount <= 0) status = 'PAID';
-    else if (paidAmount > 0) status = 'PARTIAL';
+    if (dueAmt <= 0) status = 'PAID';
+    else if (paidAmt > 0) status = 'PARTIAL';
 
     let finalCustomerId = customerId;
 
@@ -71,19 +74,22 @@ export async function POST(request: Request) {
         update: {},
         create: { name: item.productName }
       });
-      
-      const qty = item.quantity || 1;
+      const qty = Math.max(1, Number(item.quantity) || 1);
       // Prefer frontend wholesaleRate if provided, otherwise fallback to product's recorded purchase price
       // @ts-ignore
-      const purchaseRate = item.wholesaleRate || product.currentPurchasePrice || 0;
-      const profit = (item.rate - purchaseRate) * qty;
+      const purchaseRate = Number(item.wholesaleRate) || Number(product.currentPurchasePrice) || 0;
+      const rt = Number(item.rate) || 0;
+      const profit = (rt - purchaseRate) * qty;
       
       totalWholesaleCost += qty * purchaseRate;
       totalBillProfit += profit;
       
       const { wholesaleRate, ...rest } = item;
       sanitizedItems.push({
-        ...rest,
+        productName: String(item.productName || 'Unknown Product').trim(),
+        quantity: qty,
+        rate: rt,
+        total: qty * rt,
         purchaseRate,
         profit
       });
@@ -102,12 +108,12 @@ export async function POST(request: Request) {
         invoiceNumber,
         customerId: finalCustomerId,
         items: sanitizedItems,
-        totalAmount,
+        totalAmount: totalAmt,
         // @ts-ignore
         totalProfit: totalBillProfit,
-        discount,
-        paidAmount,
-        dueAmount,
+        discount: disc,
+        paidAmount: paidAmt,
+        dueAmount: dueAmt,
         status,
       }
     });
@@ -129,10 +135,10 @@ export async function POST(request: Request) {
     }
 
     // 5. Create Payment Record if paid
-    if (paidAmount > 0) {
+    if (paidAmt > 0) {
       await prisma.customerPayment.create({
         data: {
-          amount: paidAmount,
+          amount: paidAmt,
           customerId: finalCustomerId,
           billId: bill.id,
         }
@@ -141,9 +147,9 @@ export async function POST(request: Request) {
 
     // 6. Update Metrics
     await updateMetrics({
-      salesChange: totalAmount - discount,
-      cashChange: paidAmount,
-      customerDueChange: dueAmount,
+      salesChange: totalAmt - disc,
+      cashChange: paidAmt,
+      customerDueChange: dueAmt,
       profitChange: totalBillProfit,
     });
 

@@ -32,7 +32,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Supplier and items are required' }, { status: 400 });
     }
 
-    const dueAmount = totalAmount - paidAmount;
+    const totalAmt = Number(totalAmount) || 0;
+    const paidAmt = Number(paidAmount) || 0;
+    const dueAmt = totalAmt - paidAmt;
 
     // 1 & 2. Create Purchase and update Products inside a transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -41,17 +43,17 @@ export async function POST(request: Request) {
         data: {
           supplierId,
           items,
-          totalAmount,
-          paidAmount,
-          dueAmount,
+          totalAmount: totalAmt,
+          paidAmount: paidAmt,
+          dueAmount: dueAmt,
         }
       });
 
       // Create Payment Record if paid
-      if (paidAmount > 0) {
+      if (paidAmt > 0) {
         await tx.supplierPayment.create({
           data: {
-            amount: paidAmount,
+            amount: paidAmt,
             supplierId,
             purchaseId: purchase.id,
           }
@@ -59,19 +61,23 @@ export async function POST(request: Request) {
       }
 
       // Update Products, Inventory, and Price History
-      for (const item of items) {
+      for (const item of (items || [])) {
+        const qty = Math.max(1, Number(item.quantity) || 1);
+        const rt = Number(item.rate) || 0;
+        const pName = String(item.productName || 'Unknown Product').trim();
+
         let product = await tx.product.findFirst({
-          where: { name: { equals: item.productName, mode: 'insensitive' } }
+          where: { name: { equals: pName, mode: 'insensitive' } }
         });
 
         if (!product) {
           product = await tx.product.create({
             data: {
-              name: item.productName,
+              name: pName,
               // @ts-ignore
-              currentPurchasePrice: item.rate,
+              currentPurchasePrice: rt,
               // @ts-ignore
-              stockQuantity: item.quantity
+              stockQuantity: qty
             }
           });
         } else {
@@ -79,9 +85,9 @@ export async function POST(request: Request) {
             where: { id: product.id },
             data: {
               // @ts-ignore
-              currentPurchasePrice: item.rate,
+              currentPurchasePrice: rt,
               // @ts-ignore
-              stockQuantity: { increment: item.quantity }
+              stockQuantity: { increment: qty }
             }
           });
         }
@@ -92,7 +98,7 @@ export async function POST(request: Request) {
           data: {
             productId: product.id,
             purchaseId: purchase.id,
-            price: item.rate,
+            price: rt,
           }
         });
       }
@@ -102,9 +108,9 @@ export async function POST(request: Request) {
 
     // 4. Update Metrics
     await updateMetrics({
-      purchaseChange: totalAmount,
-      cashChange: -paidAmount,
-      supplierDueChange: dueAmount,
+      purchaseChange: totalAmt,
+      cashChange: -paidAmt,
+      supplierDueChange: dueAmt,
     });
 
     // 5. Log Activity
