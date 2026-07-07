@@ -118,13 +118,14 @@ export default function Suppliers() {
                 <th className="px-6 py-4 font-medium">Phone</th>
                 <th className="px-6 py-4 font-medium">Address</th>
                 <th className="px-6 py-4 font-medium">Created Date</th>
+                <th className="px-6 py-4 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-500">Loading...</td></tr>
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">Loading...</td></tr>
               ) : suppliers.length === 0 ? (
-                <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-500">No suppliers found</td></tr>
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">No suppliers found</td></tr>
               ) : (
                 suppliers.map(c => (
                   <tr key={c.id} className="hover:bg-gray-50 transition-colors">
@@ -132,6 +133,11 @@ export default function Suppliers() {
                     <td className="px-6 py-4">{c.phone}</td>
                     <td className="px-6 py-4 text-gray-500">{c.address || '-'}</td>
                     <td className="px-6 py-4 text-gray-500">{new Date(c.createdAt).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-right">
+                      <a href={`/suppliers/${c.id}`} className="text-purple-600 hover:text-purple-900 font-medium text-sm">
+                        View Profile
+                      </a>
+                    </td>
                   </tr>
                 ))
               )}
