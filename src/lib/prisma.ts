@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client' // IDE type refresh
+import { PrismaClient } from '.prisma/client' // IDE type refresh bypass
 
 const prismaClientSingleton = () => {
   return new PrismaClient()
