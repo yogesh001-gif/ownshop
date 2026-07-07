@@ -13,7 +13,8 @@ import {
   ShoppingCart,
   Package,
   BarChart3,
-  Activity
+  Activity,
+  FileImage
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -26,6 +27,7 @@ const mainNav = [
 const allNav = [
   { name: 'Suppliers', href: '/suppliers', icon: Truck },
   { name: 'Purchases', href: '/purchases', icon: ShoppingCart },
+  { name: 'Purchase Bills', href: '/purchase-bills', icon: FileImage },
   { name: 'Wholesale', href: '/wholesale', icon: Package },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Activity Log', href: '/activity', icon: Activity },

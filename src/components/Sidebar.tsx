@@ -11,7 +11,8 @@ import {
   BarChart3, 
   Activity,
   LogOut,
-  Package
+  Package,
+  FileImage
 } from 'lucide-react';
 import { SignOutButton } from '@clerk/nextjs';
 
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Customers', href: '/customers', icon: Users },
   { name: 'Suppliers', href: '/suppliers', icon: Truck },
   { name: 'Purchases', href: '/purchases', icon: ShoppingCart },
+  { name: 'Purchase Bills', href: '/purchase-bills', icon: FileImage },
   { name: 'Wholesale', href: '/wholesale', icon: Package },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Activity Log', href: '/activity', icon: Activity },

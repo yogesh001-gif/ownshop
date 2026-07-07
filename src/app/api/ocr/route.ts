@@ -15,32 +15,18 @@ const jsonSchema = {
     totalAmount: { type: "number", description: "Total bill amount." },
     paidAmount: { type: "number", description: "Amount paid, usually 0 if not specified." },
     dueAmount: { type: "number", description: "Amount due." },
-    items: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          productName: { type: "string", description: "Name of the product." },
-          quantity: { type: "number", description: "Quantity purchased." },
-          rate: { type: "number", description: "Unit price or rate." },
-          total: { type: "number", description: "Total price for the item." },
-        },
-        required: ["productName", "quantity", "rate", "total"]
-      }
-    },
     confidenceScores: {
       type: "object",
       description: "Estimate your confidence (0-100) for each field extracted based on how clearly you could read the text. Give a lower score if the image is blurry, handwriting is bad, or the field was inferred rather than explicitly stated.",
       properties: {
         supplierName: { type: "number" },
         invoiceNumber: { type: "number" },
-        totalAmount: { type: "number" },
-        items: { type: "number" }
+        totalAmount: { type: "number" }
       },
-      required: ["supplierName", "invoiceNumber", "totalAmount", "items"]
+      required: ["supplierName", "invoiceNumber", "totalAmount"]
     }
   },
-  required: ["supplierName", "invoiceNumber", "totalAmount", "items", "confidenceScores"]
+  required: ["supplierName", "invoiceNumber", "totalAmount", "confidenceScores"]
 };
 
 export async function POST(req: NextRequest) {

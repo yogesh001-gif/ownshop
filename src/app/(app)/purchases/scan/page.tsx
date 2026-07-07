@@ -25,6 +25,22 @@ export default function ScanInvoice() {
     formData.append('file', selected);
 
     try {
+      let imageUrl = null;
+      if (process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME && process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET) {
+        try {
+          const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`, {
+            method: 'POST',
+            body: formData,
+          });
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            imageUrl = uploadData.secure_url;
+          }
+        } catch (e) {
+          console.error("Cloudinary upload failed", e);
+        }
+      }
+
       const res = await fetch('/api/ocr', {
         method: 'POST',
         body: formData,
@@ -33,8 +49,7 @@ export default function ScanInvoice() {
       if (!res.ok) throw new Error("Failed to scan invoice");
       
       const data = await res.json();
-      // Add unique IDs to items for editing
-      data.items = data.items.map((item: any, i: number) => ({ ...item, id: i }));
+      data.invoiceImageUrl = imageUrl;
       setOcrData(data);
       setStatus('review');
     } catch (error) {
@@ -47,11 +62,7 @@ export default function ScanInvoice() {
     setOcrData((prev: any) => ({ ...prev, [field]: value }));
   };
 
-  const handleUpdateItem = (index: number, field: string, value: any) => {
-    const newItems = [...ocrData.items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setOcrData({ ...ocrData, items: newItems });
-  };
+  // handleUpdateItem removed since items are no longer scanned
 
   const handleConfirm = async () => {
     setSaving(true);
@@ -241,54 +252,15 @@ export default function ScanInvoice() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <h3 className="font-semibold text-gray-900 border-b pb-4 mb-4">Products Detected</h3>
-              <ConfidenceWarning score={ocrData.confidenceScores?.items} />
-              
-              <div className="space-y-4 mt-4">
-                <div className="hidden md:grid grid-cols-12 gap-4 text-xs font-semibold text-gray-500 uppercase px-2">
-                  <div className="col-span-5">Product Name</div>
-                  <div className="col-span-2">Quantity</div>
-                  <div className="col-span-2">Rate (₹)</div>
-                  <div className="col-span-3">Total (₹)</div>
-                </div>
-
-                {ocrData.items?.map((item: any, idx: number) => (
-                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center bg-gray-50 p-4 rounded-xl md:bg-transparent md:p-0">
-                    <div className="col-span-1 md:col-span-5">
-                      <label className="block text-xs text-gray-500 md:hidden mb-1">Product Name</label>
-                      <input
-                        value={item.productName || ''}
-                        onChange={(e) => handleUpdateItem(idx, 'productName', e.target.value)}
-                        className="w-full rounded-lg border-gray-300 border px-3 py-2"
-                      />
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 col-span-1 md:col-span-7 md:grid-cols-7">
-                      <div className="col-span-1 md:col-span-2">
-                        <label className="block text-xs text-gray-500 md:hidden mb-1">Qty</label>
-                        <input
-                          type="number"
-                          value={item.quantity || 0}
-                          onChange={(e) => handleUpdateItem(idx, 'quantity', parseFloat(e.target.value))}
-                          className="w-full rounded-lg border-gray-300 border px-3 py-2"
-                        />
-                      </div>
-                      <div className="col-span-1 md:col-span-2">
-                        <label className="block text-xs text-gray-500 md:hidden mb-1">Rate</label>
-                        <input
-                          type="number"
-                          value={item.rate || 0}
-                          onChange={(e) => handleUpdateItem(idx, 'rate', parseFloat(e.target.value))}
-                          className="w-full rounded-lg border-gray-300 border px-3 py-2"
-                        />
-                      </div>
-                      <div className="col-span-1 md:col-span-3 flex items-center px-3 font-medium text-gray-900">
-                        <span className="md:hidden text-xs text-gray-500 mr-2 font-normal">Total:</span>
-                        ₹{(item.quantity * item.rate).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4">
+              <div className="p-3 bg-blue-50 rounded-xl">
+                <Camera className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Invoice Image Uploaded</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  The photo of this invoice has been successfully processed and will be attached to this purchase record. Products and wholesale rates are not extracted automatically; they should be added manually in the inventory if needed.
+                </p>
               </div>
             </div>
 
@@ -332,7 +304,7 @@ export default function ScanInvoice() {
               <CheckCircle2 className="w-12 h-12 text-green-500" />
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Purchase Saved!</h3>
-            <p className="text-gray-500">Inventory and Supplier accounts have been updated.</p>
+            <p className="text-gray-500">Supplier account has been updated and the invoice image is saved.</p>
           </motion.div>
         )}
       </AnimatePresence>

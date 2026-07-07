@@ -45,16 +45,8 @@ export async function POST(req: NextRequest) {
           totalAmount,
           paidAmount,
           dueAmount,
-          items: (data.items || []).map((item: any) => {
-            const qty = Math.max(1, Math.round(Number(item.quantity) || 1)); // fallback to 1
-            const rt = Number(item.rate) || 0;
-            return {
-              productName: String(item.productName || 'Unknown Product').trim(),
-              quantity: qty,
-              rate: rt,
-              total: qty * rt
-            };
-          }),
+          invoiceImageUrl: data.invoiceImageUrl || null,
+          items: [] // Products are no longer extracted for Smart Scan
         }
       });
 
@@ -69,50 +61,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // 2c. Update Products and Price History
-      for (const item of (data.items || [])) {
-        const qty = Math.max(1, Math.round(Number(item.quantity) || 1));
-        const rt = Number(item.rate) || 0;
-        const pName = String(item.productName || 'Unknown Product').trim();
-
-        let product = await tx.product.findFirst({
-          where: { name: { equals: pName, mode: 'insensitive' } }
-        });
-
-        if (!product) {
-          product = await tx.product.create({
-            data: {
-              name: pName,
-              // @ts-ignore
-              currentPurchasePrice: rt,
-              // @ts-ignore
-              stockQuantity: qty
-            }
-          });
-        } else {
-          await tx.product.update({
-            where: { id: product.id },
-            data: {
-              // @ts-ignore
-              currentPurchasePrice: rt,
-              // @ts-ignore
-              stockQuantity: { increment: qty }
-            }
-          });
-        }
-
-        // Log the price history
-        // @ts-ignore
-        await tx.productPriceHistory.create({
-          data: {
-            productId: product.id,
-            purchaseId: purchase.id,
-            price: rt,
-          }
-        });
-      }
-
-      // 2d. Log Activity
+      // 2c. Log Activity
       await tx.activityLog.create({
         data: {
           userId,
