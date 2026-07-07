@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { ArrowLeft, Calendar, IndianRupee, Image as ImageIcon } from 'lucide-react';
 import { notFound } from 'next/navigation';
 
+export const dynamic = 'force-dynamic';
+
 export default async function SupplierPurchaseBillsPage({ params }: { params: Promise<{ supplierId: string }> }) {
   const { supplierId } = await params;
   

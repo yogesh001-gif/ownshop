@@ -2,6 +2,8 @@ import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { Truck, FileImage, ChevronRight } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 export default async function PurchaseBillsPage() {
   const suppliers = await prisma.supplier.findMany({
     include: {
