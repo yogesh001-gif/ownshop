@@ -104,6 +104,9 @@ export async function POST(request: Request) {
       }
       
       return purchase;
+    }, {
+      maxWait: 10000,
+      timeout: 30000
     });
 
     // 4. Update Metrics
