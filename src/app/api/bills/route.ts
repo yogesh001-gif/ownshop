@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'; // IDE type refresh
 import prisma from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
 import { updateMetrics } from '@/lib/metrics';
-import { BillStatus } from '.prisma/client';
+import { BillStatus } from '@prisma/client';
 
 export async function GET(request: Request) {
   try {
