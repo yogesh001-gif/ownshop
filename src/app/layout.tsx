@@ -33,6 +33,7 @@ export const metadata: Metadata = {
     title: "OwnShop",
   },
   icons: {
+    icon: "/icon.svg",
     apple: "/icon-192.png",
   },
 };
