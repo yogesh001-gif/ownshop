@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
-import { auth } from '@clerk/nextjs/server';
+import { v2 as cloudinary } from 'cloudinary';
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 export const maxDuration = 60;
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 const jsonSchema = {
   type: "object",
@@ -31,37 +38,49 @@ const jsonSchema = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json({ error: 'GEMINI_API_KEY is missing from environment variables.' }, { status: 500 });
-    }
-
     const formData = await req.formData();
     const file = formData.get('file') as File;
-    
+
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Convert file to base64
     const arrayBuffer = await file.arrayBuffer();
-    const base64Data = Buffer.from(arrayBuffer).toString('base64');
-    
-    // Determine mime type
+    const buffer = Buffer.from(arrayBuffer);
     const mimeType = file.type || 'image/jpeg';
 
-    const response = await ai.models.generateContent({
+    // 1. Upload to Cloudinary using a Promise
+    const uploadToCloudinary = () => {
+      return new Promise<any>((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { folder: 'ownshop/invoices' },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        ).end(buffer);
+      });
+    };
+
+    const cloudinaryResult = await uploadToCloudinary();
+    const invoiceImageUrl = cloudinaryResult.secure_url;
+
+    // 2. OCR using Gemini
+    const response = await genAI.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
         {
           role: 'user',
           parts: [
-            { text: "Extract the following invoice details accurately. The invoice may be handwritten, so pay special attention to handwriting. If a field is not clearly visible, try to infer it from context or leave it blank. Provide confidence scores based on legibility and certainty." },
-            { inlineData: { data: base64Data, mimeType } }
+            {
+              inlineData: {
+                data: buffer.toString("base64"),
+                mimeType,
+              }
+            },
+            {
+              text: "You are a smart invoice parser. Extract the details from this invoice and return it strictly in the JSON format specified by the schema. Ensure numbers are numbers, not strings."
+            }
           ]
         }
       ],
@@ -71,17 +90,18 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    const outputText = response.text;
-    
-    if (!outputText) {
-       throw new Error("No text returned from Gemini");
+    const text = response.text;
+    if (!text) {
+       throw new Error("Empty response from AI");
     }
 
-    const parsedData = JSON.parse(outputText);
-    return NextResponse.json(parsedData);
+    let resultData = JSON.parse(text);
+    resultData.invoiceImageUrl = invoiceImageUrl; // Inject Cloudinary URL
+
+    return NextResponse.json(resultData);
     
   } catch (error: any) {
     console.error("OCR Error:", error);
-    return NextResponse.json({ error: error.message || 'Failed to process invoice' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to process image' }, { status: 500 });
   }
 }

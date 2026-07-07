@@ -25,22 +25,6 @@ export default function ScanInvoice() {
     formData.append('file', selected);
 
     try {
-      let imageUrl = null;
-      if (process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME && process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET) {
-        try {
-          const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`, {
-            method: 'POST',
-            body: formData,
-          });
-          if (uploadRes.ok) {
-            const uploadData = await uploadRes.json();
-            imageUrl = uploadData.secure_url;
-          }
-        } catch (e) {
-          console.error("Cloudinary upload failed", e);
-        }
-      }
-
       const res = await fetch('/api/ocr', {
         method: 'POST',
         body: formData,
@@ -49,7 +33,6 @@ export default function ScanInvoice() {
       if (!res.ok) throw new Error("Failed to scan invoice");
       
       const data = await res.json();
-      data.invoiceImageUrl = imageUrl;
       setOcrData(data);
       setStatus('review');
     } catch (error) {
