@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
         {
           role: 'user',
           parts: [
-            { text: "Extract the following invoice details accurately. If a field is not clearly visible, try to infer it from context or leave it blank. Provide confidence scores based on legibility and certainty." },
+            { text: "Extract the following invoice details accurately. The invoice may be handwritten, so pay special attention to handwriting. If a field is not clearly visible, try to infer it from context or leave it blank. Provide confidence scores based on legibility and certainty." },
             { inlineData: { data: base64Data, mimeType } }
           ]
         }
