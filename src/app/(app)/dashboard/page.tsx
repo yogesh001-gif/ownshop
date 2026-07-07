@@ -65,25 +65,21 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {stats.map((stat, idx) => (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.1 }}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: idx * 0.05 }}
             key={stat.name}
-            className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+            className="rounded-2xl bg-white p-4 shadow-sm border border-gray-100 flex flex-col justify-between"
           >
-            <div className="flex items-center">
-              <div className={`rounded-xl p-3 ${stat.bg}`}>
-                <stat.icon className={`h-6 w-6 ${stat.color}`} />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="truncate text-sm font-medium text-gray-500">{stat.name}</dt>
-                  <dd className="text-2xl font-bold text-gray-900 mt-1">₹{stat.value?.toLocaleString() || 0}</dd>
-                </dl>
-              </div>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-3 ${stat.bg}`}>
+              <stat.icon className={`h-5 w-5 ${stat.color}`} />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500">{stat.name}</p>
+              <h3 className="text-lg font-bold text-gray-900 mt-0.5">₹{stat.value?.toLocaleString() || 0}</h3>
             </div>
           </motion.div>
         ))}
