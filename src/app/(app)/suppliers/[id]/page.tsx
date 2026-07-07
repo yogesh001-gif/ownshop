@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Truck, Phone, MapPin, IndianRupee, FileText, CreditCard } from 'lucide-react';
 
 import AddSupplierPaymentForm from '@/components/AddSupplierPaymentForm';
+import SupplierActions from '@/components/SupplierActions';
 
 export default async function SupplierDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -57,7 +58,10 @@ export default async function SupplierDetailsPage({ params }: { params: Promise<
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{supplier.name}</h1>
-              <p className="text-gray-500 text-sm mt-1">Supplier ID: {supplier.id}</p>
+              <div className="flex items-center gap-4 mt-1">
+                <p className="text-gray-500 text-sm">Supplier ID: {supplier.id}</p>
+                <SupplierActions supplier={supplier} />
+              </div>
             </div>
           </div>
           

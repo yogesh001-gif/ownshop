@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { ArrowLeft, FileText, CheckCircle, Clock } from 'lucide-react';
 import AddSupplierPaymentForm from '@/components/AddSupplierPaymentForm';
+import PurchaseActions from '@/components/PurchaseActions';
 
 export default async function PurchaseDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -64,6 +65,7 @@ export default async function PurchaseDetailsPage({ params }: { params: Promise<
               {isPaid ? <CheckCircle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
               {isPaid ? 'PAID' : isPartial ? 'PARTIALLY PAID' : 'UNPAID'}
             </span>
+            <PurchaseActions purchase={purchase} />
           </div>
         </div>
 
