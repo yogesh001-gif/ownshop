@@ -33,9 +33,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Supplier Name is required' }, { status: 400 });
     }
 
-    // Calculate Due Amount
-    const totalAmount = data.totalAmount || 0;
-    const paidAmount = data.paidAmount || 0;
+    // Calculate Due Amount safely
+    const totalAmount = Number(data.totalAmount) || 0;
+    const paidAmount = Number(data.paidAmount) || 0;
     const dueAmount = totalAmount - paidAmount;
 
     // 2. Start a transaction for Purchase and Products
@@ -47,12 +47,16 @@ export async function POST(req: NextRequest) {
           totalAmount,
           paidAmount,
           dueAmount,
-          items: data.items.map((item: any) => ({
-            productName: item.productName,
-            quantity: item.quantity,
-            rate: item.rate,
-            total: item.quantity * item.rate
-          })),
+          items: (data.items || []).map((item: any) => {
+            const qty = Math.max(1, Number(item.quantity) || 1); // fallback to 1
+            const rt = Number(item.rate) || 0;
+            return {
+              productName: String(item.productName || 'Unknown Product').trim(),
+              quantity: qty,
+              rate: rt,
+              total: qty * rt
+            };
+          }),
         }
       });
 
@@ -68,19 +72,23 @@ export async function POST(req: NextRequest) {
       }
 
       // 2c. Update Products and Price History
-      for (const item of data.items) {
+      for (const item of (data.items || [])) {
+        const qty = Math.max(1, Number(item.quantity) || 1);
+        const rt = Number(item.rate) || 0;
+        const pName = String(item.productName || 'Unknown Product').trim();
+
         let product = await tx.product.findFirst({
-          where: { name: { equals: item.productName, mode: 'insensitive' } }
+          where: { name: { equals: pName, mode: 'insensitive' } }
         });
 
         if (!product) {
           product = await tx.product.create({
             data: {
-              name: item.productName,
+              name: pName,
               // @ts-ignore
-              currentPurchasePrice: item.rate,
+              currentPurchasePrice: rt,
               // @ts-ignore
-              stockQuantity: item.quantity
+              stockQuantity: qty
             }
           });
         } else {
@@ -88,9 +96,9 @@ export async function POST(req: NextRequest) {
             where: { id: product.id },
             data: {
               // @ts-ignore
-              currentPurchasePrice: item.rate,
+              currentPurchasePrice: rt,
               // @ts-ignore
-              stockQuantity: { increment: item.quantity }
+              stockQuantity: { increment: qty }
             }
           });
         }
@@ -101,7 +109,7 @@ export async function POST(req: NextRequest) {
           data: {
             productId: product.id,
             purchaseId: purchase.id,
-            price: item.rate,
+            price: rt,
           }
         });
       }
