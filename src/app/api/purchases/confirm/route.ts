@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
           totalAmount,
           paidAmount,
           dueAmount,
+          // @ts-ignore
           invoiceImageUrl: data.invoiceImageUrl || null,
           items: [] // Products are no longer extracted for Smart Scan
         }
