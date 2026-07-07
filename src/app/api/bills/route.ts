@@ -60,23 +60,38 @@ export async function POST(request: Request) {
     const count = await prisma.bill.count();
     const invoiceNumber = `INV-${new Date().getFullYear()}-${(count + 1).toString().padStart(4, '0')}`;
 
-    // 3. Create Products (upsert) & Calculate Wholesale
+    // 3. Create Products (upsert) & Calculate Profit
     let totalWholesaleCost = 0;
+    let totalBillProfit = 0;
     const sanitizedItems = [];
     
     for (const item of items) {
-      await prisma.product.upsert({
+      const product = await prisma.product.upsert({
         where: { name: item.productName },
         update: {},
         create: { name: item.productName }
       });
       
       const qty = item.quantity || 1;
-      const wsRate = item.wholesaleRate || 0;
-      totalWholesaleCost += qty * wsRate;
+      // Prefer frontend wholesaleRate if provided, otherwise fallback to product's recorded purchase price
+      const purchaseRate = item.wholesaleRate || product.currentPurchasePrice || 0;
+      const profit = (item.rate - purchaseRate) * qty;
+      
+      totalWholesaleCost += qty * purchaseRate;
+      totalBillProfit += profit;
       
       const { wholesaleRate, ...rest } = item;
-      sanitizedItems.push(rest);
+      sanitizedItems.push({
+        ...rest,
+        purchaseRate,
+        profit
+      });
+
+      // Update inventory (decrement stock)
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { stockQuantity: { decrement: qty } }
+      });
     }
 
     // 4. Create Bill
@@ -86,6 +101,7 @@ export async function POST(request: Request) {
         customerId: finalCustomerId,
         items: sanitizedItems,
         totalAmount,
+        totalProfit: totalBillProfit,
         discount,
         paidAmount,
         dueAmount,
@@ -96,7 +112,7 @@ export async function POST(request: Request) {
     // 4.5 Save Wholesale Records
     for (const item of items) {
       if (item.wholesaleRate && item.wholesaleRate > 0) {
-        // @ts-ignore - IDE TS Server cache issue (Prisma types are updated in build)
+        // @ts-ignore
         await prisma.wholesaleRecord.create({
           data: {
             productName: item.productName,
@@ -121,16 +137,11 @@ export async function POST(request: Request) {
     }
 
     // 6. Update Metrics
-    const actualRevenue = totalAmount - discount;
-    let profit = actualRevenue - totalWholesaleCost;
-    if (totalWholesaleCost === 0) {
-      profit = actualRevenue * 0.2; // MVP placeholder fallback
-    }
     await updateMetrics({
       salesChange: totalAmount - discount,
       cashChange: paidAmount,
       customerDueChange: dueAmount,
-      profitChange: profit,
+      profitChange: totalBillProfit,
     });
 
     // 7. Log Activity

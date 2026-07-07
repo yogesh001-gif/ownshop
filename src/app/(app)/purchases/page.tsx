@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Trash2, ShoppingCart } from 'lucide-react';
+import { Plus, Trash2, ShoppingCart, Camera } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const purchaseItemSchema = z.object({
@@ -85,6 +85,13 @@ export default function Purchases() {
           <ShoppingCart className="h-6 w-6 text-purple-600" />
           Add Purchase
         </h2>
+        <a 
+          href="/purchases/scan"
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm"
+        >
+          <Camera className="w-4 h-4" />
+          <span className="hidden sm:inline">Smart Scan</span>
+        </a>
       </div>
 
       {success && (
