@@ -34,36 +34,71 @@ export async function POST(request: Request) {
 
     const dueAmount = totalAmount - paidAmount;
 
-    // 1. Create Products (upsert)
-    for (const item of items) {
-      await prisma.product.upsert({
-        where: { name: item.productName },
-        update: {},
-        create: { name: item.productName }
-      });
-    }
-
-    // 2. Create Purchase
-    const purchase = await prisma.purchase.create({
-      data: {
-        supplierId,
-        items,
-        totalAmount,
-        paidAmount,
-        dueAmount,
-      }
-    });
-
-    // 3. Create Payment Record if paid
-    if (paidAmount > 0) {
-      await prisma.supplierPayment.create({
+    // 1 & 2. Create Purchase and update Products inside a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Create Purchase
+      const purchase = await tx.purchase.create({
         data: {
-          amount: paidAmount,
           supplierId,
-          purchaseId: purchase.id,
+          items,
+          totalAmount,
+          paidAmount,
+          dueAmount,
         }
       });
-    }
+
+      // Create Payment Record if paid
+      if (paidAmount > 0) {
+        await tx.supplierPayment.create({
+          data: {
+            amount: paidAmount,
+            supplierId,
+            purchaseId: purchase.id,
+          }
+        });
+      }
+
+      // Update Products, Inventory, and Price History
+      for (const item of items) {
+        let product = await tx.product.findFirst({
+          where: { name: { equals: item.productName, mode: 'insensitive' } }
+        });
+
+        if (!product) {
+          product = await tx.product.create({
+            data: {
+              name: item.productName,
+              // @ts-ignore
+              currentPurchasePrice: item.rate,
+              // @ts-ignore
+              stockQuantity: item.quantity
+            }
+          });
+        } else {
+          await tx.product.update({
+            where: { id: product.id },
+            data: {
+              // @ts-ignore
+              currentPurchasePrice: item.rate,
+              // @ts-ignore
+              stockQuantity: { increment: item.quantity }
+            }
+          });
+        }
+
+        // Log the price history
+        // @ts-ignore
+        await tx.productPriceHistory.create({
+          data: {
+            productId: product.id,
+            purchaseId: purchase.id,
+            price: item.rate,
+          }
+        });
+      }
+      
+      return purchase;
+    });
 
     // 4. Update Metrics
     await updateMetrics({
@@ -78,12 +113,12 @@ export async function POST(request: Request) {
         userId,
         action: 'CREATED_PURCHASE',
         entity: 'Purchase',
-        entityId: purchase.id,
-        newValue: JSON.stringify(purchase),
+        entityId: result.id,
+        newValue: JSON.stringify(result),
       }
     });
 
-    return NextResponse.json(purchase, { status: 201 });
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to create purchase' }, { status: 500 });
   }
