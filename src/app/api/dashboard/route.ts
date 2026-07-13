@@ -1,34 +1,26 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
+import prisma from '@/lib/prisma';
+import { apiErrorResponse } from '@/lib/api-error';
 import { getOrCreateMetrics } from '@/lib/metrics';
 
-export async function GET(request: Request) {
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
-    const { userId } = await auth();
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const metrics = await getOrCreateMetrics();
-    
-    // Fetch recent activities
-    const recentActivities = await prisma.activityLog.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    });
-
-    // Fetch recent bills
-    const recentBills = await prisma.bill.findMany({
-      include: { customer: true },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    });
-
-    return NextResponse.json({
-      metrics,
-      recentActivities,
-      recentBills,
-    });
+    const [metrics, recentActivities, recentBills] = await Promise.all([
+      getOrCreateMetrics(userId),
+      prisma.activityLog.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'desc' }, take: 5 }),
+      prisma.bill.findMany({
+        where: { ownerId: userId },
+        include: { customer: true },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+    ]);
+    return NextResponse.json({ metrics, recentActivities, recentBills });
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch dashboard data' }, { status: 500 });
+    return apiErrorResponse(error, 'Failed to fetch dashboard data');
   }
 }

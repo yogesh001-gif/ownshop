@@ -11,8 +11,8 @@ export default async function PurchaseDetailsPage({ params }: { params: Promise<
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
-  const purchase = await prisma.purchase.findUnique({
-    where: { id },
+  const purchase = await prisma.purchase.findFirst({
+    where: { id, ownerId: userId },
     include: {
       supplier: true,
       payments: {
@@ -110,7 +110,7 @@ export default async function PurchaseDetailsPage({ params }: { params: Promise<
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 bg-white">
-                {(purchase.items as any[]).map((item, idx) => (
+                {purchase.items.map((item, idx) => (
                   <tr key={idx} className="hover:bg-gray-50">
                     <td className="px-4 py-4 font-medium text-gray-900">{item.productName}</td>
                     <td className="px-4 py-4 text-gray-600 text-right">{item.quantity}</td>

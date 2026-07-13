@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Trash2, ShoppingCart, Camera } from 'lucide-react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 
 const purchaseItemSchema = z.object({
   productName: z.string().min(1, "Product name is required"),
@@ -20,20 +21,28 @@ const purchaseSchema = z.object({
 });
 
 type PurchaseForm = z.infer<typeof purchaseSchema>;
+type SupplierOption = { id: string; name: string; phone: string };
+
+function isSupplierOption(value: unknown): value is SupplierOption {
+  return typeof value === 'object' && value !== null &&
+    typeof (value as SupplierOption).id === 'string' &&
+    typeof (value as SupplierOption).name === 'string' &&
+    typeof (value as SupplierOption).phone === 'string';
+}
 
 export default function Purchases() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
 
   useEffect(() => {
     fetch('/api/suppliers')
-      .then(res => res.json())
-      .then(data => setSuppliers(Array.isArray(data) ? data : []))
+      .then((res) => res.json() as Promise<unknown>)
+      .then((data) => setSuppliers(Array.isArray(data) ? data.filter(isSupplierOption) : []))
       .catch(() => {});
   }, []);
 
-  const { register, control, handleSubmit, watch, reset, formState: { errors } } = useForm<PurchaseForm>({
+  const { register, control, handleSubmit, reset, formState: { errors } } = useForm<PurchaseForm>({
     resolver: zodResolver(purchaseSchema),
     defaultValues: {
       supplierId: '',
@@ -44,8 +53,8 @@ export default function Purchases() {
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
 
-  const watchItems = watch("items");
-  const watchPaid = watch("paidAmount") || 0;
+  const watchItems = useWatch({ control, name: 'items' }) ?? [];
+  const watchPaid = useWatch({ control, name: 'paidAmount' }) ?? 0;
 
   const totalAmount = watchItems.reduce((acc, item) => acc + ((item.quantity || 0) * (item.rate || 0)), 0);
   const dueAmount = totalAmount - watchPaid;
@@ -53,19 +62,10 @@ export default function Purchases() {
   const onSubmit = async (data: PurchaseForm) => {
     setLoading(true);
     
-    const payload = {
-      ...data,
-      totalAmount,
-      items: data.items.map(item => ({
-        ...item,
-        total: item.quantity * item.rate
-      }))
-    };
-
     const res = await fetch('/api/purchases', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(data)
     });
 
     if (res.ok) {
@@ -86,13 +86,13 @@ export default function Purchases() {
           <ShoppingCart className="h-6 w-6 text-purple-600" />
           Add Purchase
         </h2>
-        <a 
+        <Link
           href="/purchases/scan"
           className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm"
         >
           <Camera className="w-4 h-4" />
           <span className="hidden sm:inline">Smart Scan</span>
-        </a>
+        </Link>
       </div>
 
       {success && (

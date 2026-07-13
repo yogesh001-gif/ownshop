@@ -3,53 +3,59 @@ import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { Package } from 'lucide-react';
 
+type LedgerRecord = {
+  id: string;
+  type: 'PURCHASE' | 'BILL_COGS';
+  date: Date;
+  entityName: string;
+  entityLink: string;
+  productName: string;
+  quantity: number;
+  wholesaleRate: number;
+  totalCost: number;
+};
+
 export default async function WholesalePage() {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
   const purchases = await prisma.purchase.findMany({
+    where: { ownerId: userId },
     include: { supplier: true },
     orderBy: { date: 'desc' },
   });
 
-  // @ts-ignore
   const billWholesale = await prisma.wholesaleRecord.findMany({
+    where: { ownerId: userId },
     orderBy: { date: 'desc' },
   });
 
-  let records: any[] = [];
-
-  // 1. Add Supplier Purchases
-  purchases.forEach(p => {
-    (p.items as any[]).forEach((item, idx) => {
-      records.push({
-        id: `purchase-${p.id}-${idx}`,
-        type: 'PURCHASE',
-        date: p.date,
-        entityName: p.supplier.name,
-        entityLink: `/suppliers/${p.supplierId}`,
+  const records: LedgerRecord[] = [
+    ...purchases.flatMap((purchase) => purchase.items.map((item, index) => (
+      {
+        id: `purchase-${purchase.id}-${index}`,
+        type: 'PURCHASE' as const,
+        date: purchase.date,
+        entityName: purchase.supplier.name,
+        entityLink: `/suppliers/${purchase.supplierId}`,
         productName: item.productName,
         quantity: item.quantity,
         wholesaleRate: item.rate,
-        totalCost: item.quantity * item.rate
-      });
-    });
-  });
-
-  // 2. Add Customer Bill Wholesale Records
-  billWholesale.forEach((w: any) => {
-    records.push({
-      id: `bill-${w.id}`,
-      type: 'BILL_COGS',
-      date: w.date,
+        totalCost: item.total,
+      }
+    ))),
+    ...billWholesale.map((record) => ({
+      id: `bill-${record.id}`,
+      type: 'BILL_COGS' as const,
+      date: record.date,
       entityName: 'Customer Bill',
-      entityLink: `/invoice/${w.billId}`,
-      productName: w.productName,
-      quantity: w.quantity,
-      wholesaleRate: w.wholesaleRate,
-      totalCost: w.totalCost
-    });
-  });
+      entityLink: `/invoice/${record.billId}`,
+      productName: record.productName,
+      quantity: record.quantity,
+      wholesaleRate: record.wholesaleRate,
+      totalCost: record.totalCost,
+    })),
+  ];
 
   // Sort combined records by date descending
   records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -78,7 +84,7 @@ export default async function WholesalePage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {records.map((record: any) => (
+              {records.map((record) => (
                 <tr key={record.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(record.date).toLocaleDateString('en-IN')}

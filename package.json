@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "db:push": "prisma db push",
+    "migrate:legacy-data": "node scripts/migrate-legacy-ownership.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

@@ -4,15 +4,22 @@ import { useState, useEffect } from 'react';
 import { Activity, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+type ActivityEntry = {
+  id: string;
+  action: string;
+  createdAt: string;
+  userId: string;
+};
+
 export default function ActivityLog() {
-  const [activities, setActivities] = useState<any[]>([]);
+  const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch('/api/activity')
       .then(res => res.json())
-      .then(data => {
-        setActivities(Array.isArray(data) ? data : []);
+      .then((data: unknown) => {
+        setActivities(Array.isArray(data) ? data.filter(isActivityEntry) : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -62,4 +69,12 @@ export default function ActivityLog() {
       </div>
     </div>
   );
+}
+
+function isActivityEntry(value: unknown): value is ActivityEntry {
+  return typeof value === 'object' && value !== null &&
+    typeof (value as ActivityEntry).id === 'string' &&
+    typeof (value as ActivityEntry).action === 'string' &&
+    typeof (value as ActivityEntry).createdAt === 'string' &&
+    typeof (value as ActivityEntry).userId === 'string';
 }

@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OwnShop
 
-## Getting Started
+OwnShop is a Next.js business-management PWA for invoices, purchases, payments, suppliers, customers, and reports. It uses Clerk for authentication, Prisma with MongoDB for persistence, and optional Cloudinary/Gemini invoice scanning.
 
-First, run the development server:
+## Getting started
+
+Configure `DATABASE_URL`, Clerk keys, and (if invoice scanning is enabled) Cloudinary and Gemini credentials in `.env`, then run:
 
 ```bash
+npm install
+npm run db:push
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Existing databases
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Every business record is isolated by its Clerk owner ID. For an existing database, first assign current records to the correct business owner, then update the database schema:
 
-## Learn More
+```powershell
+$env:LEGACY_OWNER_ID = 'user_...'
+npm run migrate:legacy-data
+npm run db:push
+```
 
-To learn more about Next.js, take a look at the following resources:
+Use the Clerk user ID for the owner. The migration is intentionally explicit so data is never assigned to the wrong account.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Verification
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+npx tsc --noEmit
+npm run build
+```

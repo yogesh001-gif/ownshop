@@ -10,8 +10,8 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
-  const customer = await prisma.customer.findUnique({
-    where: { id },
+  const customer = await prisma.customer.findFirst({
+    where: { id, ownerId: userId },
     include: {
       bills: {
         orderBy: { date: 'desc' }
@@ -32,9 +32,9 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
   }
 
   // Calculate totals
-  const totalDue = customer.bills.reduce((acc: number, bill: any) => acc + bill.dueAmount, 0);
-  const totalPaid = customer.payments.reduce((acc: number, payment: any) => acc + payment.amount, 0);
-  const totalBilled = customer.bills.reduce((acc: number, bill: any) => acc + (bill.totalAmount - bill.discount), 0);
+  const totalDue = customer.bills.reduce((acc, bill) => acc + bill.dueAmount, 0);
+  const totalPaid = customer.payments.reduce((acc, payment) => acc + payment.amount, 0);
+  const totalBilled = customer.bills.reduce((acc, bill) => acc + bill.totalAmount - bill.discount, 0);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -110,7 +110,7 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
                 {customer.bills.length === 0 ? (
                   <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-500">No bills generated yet.</td></tr>
                 ) : (
-                  customer.bills.map((bill: any) => (
+                  customer.bills.map((bill) => (
                     <tr key={bill.id} className="hover:bg-gray-50">
                       <td className="px-4 py-4 font-medium text-blue-600 hover:underline">
                         <Link href={`/invoice/${bill.id}`}>{bill.invoiceNumber}</Link>
@@ -162,7 +162,7 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
                 {customer.payments.length === 0 ? (
                   <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-500">No payments recorded yet.</td></tr>
                 ) : (
-                  customer.payments.map((payment: any) => (
+                  customer.payments.map((payment) => (
                     <tr key={payment.id} className="hover:bg-gray-50">
                       <td className="px-4 py-4 text-gray-500">
                         {new Date(payment.date).toLocaleDateString('en-IN')}

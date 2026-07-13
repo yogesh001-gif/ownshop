@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Truck, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 
 const supplierSchema = z.object({
   name: z.string().min(2, "Name is required"),
@@ -14,9 +15,18 @@ const supplierSchema = z.object({
 });
 
 type SupplierForm = z.infer<typeof supplierSchema>;
+type SupplierSummary = { id: string; name: string; phone: string; address: string | null; createdAt: string };
+
+function isSupplierSummary(value: unknown): value is SupplierSummary {
+  return typeof value === 'object' && value !== null &&
+    typeof (value as SupplierSummary).id === 'string' &&
+    typeof (value as SupplierSummary).name === 'string' &&
+    typeof (value as SupplierSummary).phone === 'string' &&
+    typeof (value as SupplierSummary).createdAt === 'string';
+}
 
 export default function Suppliers() {
-  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
@@ -27,14 +37,20 @@ export default function Suppliers() {
 
   const fetchSuppliers = async (searchQuery = '') => {
     setLoading(true);
-    const res = await fetch(`/api/suppliers${searchQuery ? `?search=${searchQuery}` : ''}`);
-    const data = await res.json();
-    setSuppliers(Array.isArray(data) ? data : []);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/suppliers${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''}`);
+      const data: unknown = await res.json();
+      setSuppliers(Array.isArray(data) ? data.filter(isSupplierSummary) : []);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchSuppliers();
+    const loadSuppliers = async () => {
+      await fetchSuppliers();
+    };
+    void loadSuppliers();
   }, []);
 
   const onSubmit = async (data: SupplierForm) => {
@@ -134,9 +150,9 @@ export default function Suppliers() {
                     <td className="px-6 py-4 text-gray-500">{c.address || '-'}</td>
                     <td className="px-6 py-4 text-gray-500">{new Date(c.createdAt).toLocaleDateString()}</td>
                     <td className="px-6 py-4 text-right">
-                      <a href={`/suppliers/${c.id}`} className="text-purple-600 hover:text-purple-900 font-medium text-sm">
+                      <Link href={`/suppliers/${c.id}`} className="text-purple-600 hover:text-purple-900 font-medium text-sm">
                         View Profile
-                      </a>
+                      </Link>
                     </td>
                   </tr>
                 ))

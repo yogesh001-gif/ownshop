@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { startTransition, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingBag } from 'lucide-react';
 
@@ -10,11 +10,12 @@ export default function SplashScreen() {
   useEffect(() => {
     // Check if running on mobile or as PWA (standalone)
     const isMobile = window.innerWidth <= 768;
-    const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    const standaloneNavigator = window.navigator as Navigator & { standalone?: boolean };
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches || standaloneNavigator.standalone === true;
 
     // We only want to show the splash screen on mobile/PWA environments on initial load
     if ((isMobile || isPWA) && !sessionStorage.getItem('splashShown')) {
-      setShowSplash(true);
+      startTransition(() => setShowSplash(true));
       
       // Hide splash after 2 seconds
       const timer = setTimeout(() => {

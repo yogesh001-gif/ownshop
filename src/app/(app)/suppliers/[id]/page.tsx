@@ -4,7 +4,6 @@ import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { ArrowLeft, Truck, Phone, MapPin, IndianRupee, FileText, CreditCard } from 'lucide-react';
 
-import AddSupplierPaymentForm from '@/components/AddSupplierPaymentForm';
 import SupplierActions from '@/components/SupplierActions';
 
 export default async function SupplierDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -12,8 +11,8 @@ export default async function SupplierDetailsPage({ params }: { params: Promise<
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
-  const supplier = await prisma.supplier.findUnique({
-    where: { id },
+  const supplier = await prisma.supplier.findFirst({
+    where: { id, ownerId: userId },
     include: {
       purchases: {
         orderBy: { date: 'desc' }
@@ -34,9 +33,9 @@ export default async function SupplierDetailsPage({ params }: { params: Promise<
   }
 
   // Calculate totals
-  const totalDue = supplier.purchases.reduce((acc: number, purchase: any) => acc + purchase.dueAmount, 0);
-  const totalPaid = supplier.payments.reduce((acc: number, payment: any) => acc + payment.amount, 0);
-  const totalPurchased = supplier.purchases.reduce((acc: number, purchase: any) => acc + purchase.totalAmount, 0);
+  const totalDue = supplier.purchases.reduce((acc, purchase) => acc + purchase.dueAmount, 0);
+  const totalPaid = supplier.payments.reduce((acc, payment) => acc + payment.amount, 0);
+  const totalPurchased = supplier.purchases.reduce((acc, purchase) => acc + purchase.totalAmount, 0);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -86,7 +85,7 @@ export default async function SupplierDetailsPage({ params }: { params: Promise<
           <h2 className={`text-4xl font-black tracking-tight mb-4 ${totalDue > 0 ? 'text-red-600' : 'text-green-600'}`}>
             ₹{totalDue.toLocaleString()}
           </h2>
-          <AddSupplierPaymentForm supplierId={supplier.id} purchaseId="" dueAmount={totalDue} />
+          <p className="text-sm text-gray-500">Open an unpaid purchase below to record a payment.</p>
         </div>
       </div>
 
@@ -116,7 +115,7 @@ export default async function SupplierDetailsPage({ params }: { params: Promise<
                 {supplier.purchases.length === 0 ? (
                   <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-500">No purchases recorded yet.</td></tr>
                 ) : (
-                  supplier.purchases.map((purchase: any) => {
+                  supplier.purchases.map((purchase) => {
                     const status = purchase.dueAmount <= 0 ? 'PAID' : (purchase.paidAmount > 0 ? 'PARTIAL' : 'UNPAID');
                     
                     return (
@@ -172,7 +171,7 @@ export default async function SupplierDetailsPage({ params }: { params: Promise<
                 {supplier.payments.length === 0 ? (
                   <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-500">No payments recorded yet.</td></tr>
                 ) : (
-                  supplier.payments.map((payment: any) => (
+                  supplier.payments.map((payment) => (
                     <tr key={payment.id} className="hover:bg-gray-50">
                       <td className="px-4 py-4 text-gray-500">
                         {new Date(payment.date).toLocaleDateString('en-IN')}

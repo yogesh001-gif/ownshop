@@ -9,7 +9,6 @@ import {
   Users, 
   Truck, 
   Scale,
-  PlusCircle,
   FileText,
   ShoppingCart,
   UserPlus,
@@ -17,15 +16,26 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+type Metrics = {
+  totalSales: number;
+  totalProfit: number;
+  currentCash: number;
+  customerDue: number;
+  supplierDue: number;
+};
+type RecentBill = { id: string; invoiceNumber: string; totalAmount: number; status: 'PAID' | 'PARTIAL' | 'UNPAID'; customer: { name: string } | null };
+type RecentActivity = { id: string; action: string; createdAt: string };
+type DashboardData = { metrics: Metrics; recentBills: RecentBill[]; recentActivities: RecentActivity[] };
+
 export default function Dashboard() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch('/api/dashboard')
-      .then(res => res.json())
-      .then(data => {
-        setData(data);
+      .then((res) => res.json() as Promise<DashboardData>)
+      .then((dashboardData) => {
+        setData(dashboardData);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -39,7 +49,7 @@ export default function Dashboard() {
     );
   }
 
-  const m = data?.metrics || {};
+  const m = data?.metrics ?? { totalSales: 0, totalProfit: 0, currentCash: 0, customerDue: 0, supplierDue: 0 };
   const netPosition = m.currentCash + m.customerDue - m.supplierDue;
 
   const stats = [
@@ -116,7 +126,7 @@ export default function Dashboard() {
           </div>
           <div className="p-6">
             <div className="space-y-4">
-              {data?.recentBills?.map((bill: any) => (
+              {data?.recentBills?.map((bill) => (
                 <div key={bill.id} className="flex items-center justify-between border-b border-gray-50 pb-4 last:border-0 last:pb-0">
                   <div>
                     <p className="font-medium text-gray-900">{bill.customer?.name || 'Walk-in Customer'}</p>
@@ -146,7 +156,7 @@ export default function Dashboard() {
           </div>
           <div className="p-6">
             <div className="space-y-6">
-              {data?.recentActivities?.map((activity: any) => (
+              {data?.recentActivities?.map((activity) => (
                 <div key={activity.id} className="flex items-start">
                   <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 ring-8 ring-white">
                     <Activity className="h-4 w-4 text-blue-600" />

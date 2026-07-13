@@ -1,14 +1,36 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Camera, Upload, CheckCircle2, AlertTriangle, FileText, IndianRupee } from 'lucide-react';
+import { Camera, Upload, CheckCircle2, AlertTriangle, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
+
+type ConfidenceScores = { supplierName?: number; invoiceNumber?: number; totalAmount?: number };
+type OcrData = {
+  supplierName: string;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  totalAmount: number;
+  paidAmount: number;
+  dueAmount?: number;
+  confidenceScores: ConfidenceScores;
+  invoiceImageUrl: string;
+};
+
+function ConfidenceWarning({ score }: { score?: number }) {
+  if (score === undefined || score >= 80) return null;
+  return (
+    <div className="flex items-center gap-1 text-orange-600 text-xs mt-1 bg-orange-50 px-2 py-0.5 rounded w-fit">
+      <AlertTriangle className="w-3 h-3" />
+      Low confidence ({score}%) - Please verify
+    </div>
+  );
+}
 
 export default function ScanInvoice() {
-  const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'scanning' | 'review' | 'success'>('idle');
-  const [ocrData, setOcrData] = useState<any>(null);
+  const [ocrData, setOcrData] = useState<OcrData | null>(null);
   const [saving, setSaving] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -17,7 +39,6 @@ export default function ScanInvoice() {
     const selected = e.target.files?.[0];
     if (!selected) return;
 
-    setFile(selected);
     setPreview(URL.createObjectURL(selected));
     setStatus('scanning');
 
@@ -32,20 +53,18 @@ export default function ScanInvoice() {
 
       if (!res.ok) throw new Error("Failed to scan invoice");
       
-      const data = await res.json();
+      const data = await res.json() as OcrData;
       setOcrData(data);
       setStatus('review');
-    } catch (error) {
+    } catch {
       alert("Error scanning invoice. Please try again.");
       setStatus('idle');
     }
   };
 
-  const handleUpdateField = (field: string, value: any) => {
-    setOcrData((prev: any) => ({ ...prev, [field]: value }));
+  const handleUpdateField = <Field extends keyof OcrData>(field: Field, value: OcrData[Field]) => {
+    setOcrData((previous) => previous ? { ...previous, [field]: value } : previous);
   };
-
-  // handleUpdateItem removed since items are no longer scanned
 
   const handleConfirm = async () => {
     setSaving(true);
@@ -57,8 +76,7 @@ export default function ScanInvoice() {
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to save purchase");
+        throw new Error('Failed to save purchase');
       }
       
       setStatus('success');
@@ -66,20 +84,10 @@ export default function ScanInvoice() {
       setTimeout(() => {
         window.location.href = '/purchases';
       }, 2000);
-    } catch (error: any) {
-      alert(`Error saving: ${error.message}`);
+    } catch (error) {
+      alert(`Error saving: ${error instanceof Error ? error.message : 'Please try again.'}`);
       setSaving(false);
     }
-  };
-
-  const ConfidenceWarning = ({ score }: { score: number }) => {
-    if (score === undefined || score >= 80) return null;
-    return (
-      <div className="flex items-center gap-1 text-orange-600 text-xs mt-1 bg-orange-50 px-2 py-0.5 rounded w-fit">
-        <AlertTriangle className="w-3 h-3" />
-        Low confidence ({score}%) - Please verify
-      </div>
-    );
   };
 
   return (
@@ -105,7 +113,7 @@ export default function ScanInvoice() {
             </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Upload or Scan Invoice</h3>
             <p className="text-gray-500 mb-8 max-w-md mx-auto">
-              Our AI will automatically read the supplier name, items, wholesale rates, and calculate everything for you.
+              Our AI will read the supplier, invoice reference, date, and payment totals for your review.
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -133,7 +141,7 @@ export default function ScanInvoice() {
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
-              accept="image/*,application/pdf"
+              accept="image/jpeg,image/png,image/webp"
               className="hidden"
             />
           </motion.div>
@@ -148,7 +156,7 @@ export default function ScanInvoice() {
             className="rounded-2xl bg-white shadow-sm border border-gray-100 p-12 text-center"
           >
             <div className="relative mx-auto w-32 h-32 mb-6">
-              {preview && <img src={preview} alt="Scanning" className="w-full h-full object-cover rounded-xl opacity-50" />}
+              {preview && <Image src={preview} alt="Scanning" fill unoptimized sizes="128px" className="object-cover rounded-xl opacity-50" />}
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
               </div>
@@ -170,7 +178,7 @@ export default function ScanInvoice() {
               <div>
                 <h4 className="font-semibold text-orange-900">Please review the details below</h4>
                 <p className="text-sm text-orange-700 mt-1">
-                  AI has extracted the information. Check everything before confirming. New suppliers and products will be created automatically.
+                  AI has extracted the information. Check everything before confirming. A supplier will be created only when no matching supplier exists.
                 </p>
               </div>
             </div>
@@ -242,7 +250,7 @@ export default function ScanInvoice() {
               <div>
                 <h3 className="font-semibold text-gray-900">Invoice Image Uploaded</h3>
                 <p className="text-sm text-gray-500 mt-1">
-                  The photo of this invoice has been successfully processed and will be attached to this purchase record. Products and wholesale rates are not extracted automatically; they should be added manually in the inventory if needed.
+                  The photo of this invoice will be attached to this purchase record. Products and wholesale rates are not extracted automatically, so add them through a regular purchase when inventory must be updated.
                 </p>
               </div>
             </div>

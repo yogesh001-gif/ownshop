@@ -1,107 +1,69 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
+import prisma from '@/lib/prisma';
+import { apiErrorResponse } from '@/lib/api-error';
+import { updateMetrics } from '@/lib/metrics';
+import { confirmPurchaseSchema, validationError } from '@/lib/validation';
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const parsed = confirmPurchaseSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid scanned purchase', details: validationError(parsed.error) }, { status: 400 });
     }
 
-    const data = await req.json();
-
-    // 1. Resolve Supplier (Create if not exists)
-    let supplier;
-    if (data.supplierName) {
-      // Very basic match by name, a better system would use IDs or phone numbers
-      supplier = await prisma.supplier.findFirst({
-        where: { name: { equals: data.supplierName, mode: 'insensitive' } }
+    const data = parsed.data;
+    const dueAmount = data.totalAmount - data.paidAmount;
+    const purchase = await prisma.$transaction(async (tx) => {
+      let supplier = await tx.supplier.findFirst({
+        where: { ownerId: userId, name: { equals: data.supplierName, mode: 'insensitive' } },
       });
-      
       if (!supplier) {
-        supplier = await prisma.supplier.create({
+        supplier = await tx.supplier.create({
           data: {
+            ownerId: userId,
             name: data.supplierName,
-            phone: `AUTO-${Date.now()}` // Needs a phone number due to unique constraint, creating a dummy one
-          }
+            phone: data.supplierPhone ?? `AUTO-${crypto.randomUUID()}`,
+          },
         });
       }
-    } else {
-      return NextResponse.json({ error: 'Supplier Name is required' }, { status: 400 });
-    }
 
-    // Calculate Due Amount safely
-    const totalAmount = Number(data.totalAmount) || 0;
-    const paidAmount = Number(data.paidAmount) || 0;
-    const dueAmount = totalAmount - paidAmount;
-
-    // 2. Start a transaction for Purchase and Products
-    const result = await prisma.$transaction(async (tx) => {
-      // 2a. Create Purchase
-      const purchase = await tx.purchase.create({
+      const created = await tx.purchase.create({
         data: {
+          ownerId: userId,
           supplierId: supplier.id,
-          totalAmount,
-          paidAmount,
+          date: data.invoiceDate ?? new Date(),
+          supplierInvoiceNumber: data.invoiceNumber ?? null,
+          invoiceImageUrl: data.invoiceImageUrl ?? null,
+          items: [],
+          totalAmount: data.totalAmount,
+          paidAmount: data.paidAmount,
           dueAmount,
-          // @ts-ignore
-          invoiceImageUrl: data.invoiceImageUrl || null,
-          items: [] // Products are no longer extracted for Smart Scan
-        }
+        },
       });
 
-      // 2b. If paidAmount > 0, create a payment record
-      if (paidAmount > 0) {
+      if (data.paidAmount > 0) {
         await tx.supplierPayment.create({
-          data: {
-            supplierId: supplier.id,
-            purchaseId: purchase.id,
-            amount: paidAmount
-          }
+          data: { ownerId: userId, supplierId: supplier.id, purchaseId: created.id, amount: data.paidAmount },
         });
       }
 
-      // 2c. Log Activity
+      await updateMetrics(userId, {
+        purchaseChange: data.totalAmount,
+        supplierDueChange: dueAmount,
+        cashChange: -data.paidAmount,
+      }, tx);
       await tx.activityLog.create({
-        data: {
-          userId,
-          action: 'CREATED_PURCHASE',
-          entity: 'Purchase',
-          entityId: purchase.id
-        }
+        data: { ownerId: userId, userId, action: 'CREATED_SCANNED_PURCHASE', entity: 'Purchase', entityId: created.id },
       });
+      return created;
+    }, { maxWait: 10_000, timeout: 30_000 });
 
-      // 2e. Update Business Metrics
-      const metrics = await tx.businessMetrics.findFirst();
-      if (metrics) {
-        await tx.businessMetrics.update({
-          where: { id: metrics.id },
-          data: {
-            totalPurchase: { increment: totalAmount },
-            supplierDue: { increment: dueAmount },
-            currentCash: { decrement: paidAmount }
-          }
-        });
-      } else {
-        await tx.businessMetrics.create({
-          data: {
-            totalPurchase: totalAmount,
-            supplierDue: dueAmount,
-            currentCash: -paidAmount
-          }
-        });
-      }
-
-      return purchase;
-    }, {
-      maxWait: 10000,
-      timeout: 30000
-    });
-
-    return NextResponse.json(result);
-  } catch (error: any) {
-    console.error("Confirmation Error:", error);
-    return NextResponse.json({ error: error.message || 'Failed to confirm purchase' }, { status: 500 });
+    return NextResponse.json(purchase, { status: 201 });
+  } catch (error) {
+    return apiErrorResponse(error, 'Failed to confirm purchase');
   }
 }

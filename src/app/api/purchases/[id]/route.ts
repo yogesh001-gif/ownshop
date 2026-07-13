@@ -1,174 +1,103 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
+import prisma from '@/lib/prisma';
+import { ApiError, apiErrorResponse } from '@/lib/api-error';
 import { updateMetrics } from '@/lib/metrics';
+import { purchaseUpdateSchema, recordIdSchema, validationError } from '@/lib/validation';
 
-export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+type RouteContext = { params: Promise<{ id: string }> };
+
+export async function PUT(request: NextRequest, { params }: RouteContext) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
-    const { userId } = await auth();
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const { id } = await params;
-    const body = await req.json();
-
-    // Find existing purchase to calculate delta
-    const existingPurchase = await prisma.purchase.findUnique({
-      where: { id },
-      include: { payments: true }
-    });
-
-    if (!existingPurchase) {
-      return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
+    const id = (await params).id;
+    if (!recordIdSchema.safeParse(id).success) return NextResponse.json({ error: 'Invalid purchase id' }, { status: 400 });
+    const parsed = purchaseUpdateSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid purchase', details: validationError(parsed.error) }, { status: 400 });
     }
 
-    const newTotalAmount = Number(body.totalAmount);
-    const newPaidAmount = Number(body.paidAmount);
-    const newDate = new Date(body.date);
-    
-    if (isNaN(newTotalAmount) || isNaN(newPaidAmount)) {
-      return NextResponse.json({ error: 'Invalid amounts' }, { status: 400 });
-    }
+    const updated = await prisma.$transaction(async (tx) => {
+      const existing = await tx.purchase.findFirst({ where: { id, ownerId: userId } });
+      if (!existing) throw new ApiError('Purchase not found', 404);
+      if (parsed.data.paidAmount < existing.paidAmount) {
+        throw new ApiError('Paid amount cannot be reduced. Record a correction separately.', 400);
+      }
 
-    const newDueAmount = newTotalAmount - newPaidAmount;
-
-    const deltaTotal = newTotalAmount - existingPurchase.totalAmount;
-    const deltaPaid = newPaidAmount - existingPurchase.paidAmount;
-    const deltaDue = newDueAmount - existingPurchase.dueAmount;
-
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Update purchase
+      const dueAmount = parsed.data.totalAmount - parsed.data.paidAmount;
+      const paidDelta = parsed.data.paidAmount - existing.paidAmount;
       const updatedPurchase = await tx.purchase.update({
-        where: { id },
+        where: { id: existing.id },
         data: {
-          totalAmount: newTotalAmount,
-          paidAmount: newPaidAmount,
-          dueAmount: newDueAmount,
-          date: newDate
-        }
+          totalAmount: parsed.data.totalAmount,
+          paidAmount: parsed.data.paidAmount,
+          dueAmount,
+          date: parsed.data.date,
+        },
       });
 
-      // 2. Adjust payments if paid amount changed
-      if (deltaPaid !== 0) {
-        // If they increased paid amount, add a new payment record or adjust existing?
-        // Since we allow editing paidAmount directly, let's just log a balancing payment 
-        // OR simply rely on the purchase's paidAmount. 
-        // But SupplierPayment exists. Let's create an adjustment payment.
+      if (paidDelta > 0) {
         await tx.supplierPayment.create({
-          data: {
-            supplierId: existingPurchase.supplierId,
-            purchaseId: id,
-            amount: deltaPaid,
-          }
+          data: { ownerId: userId, supplierId: existing.supplierId, purchaseId: existing.id, amount: paidDelta },
         });
       }
 
-      // 3. Update Metrics
-      const metrics = await tx.businessMetrics.findFirst();
-      if (metrics) {
-        await tx.businessMetrics.update({
-          where: { id: metrics.id },
-          data: {
-            totalPurchase: { increment: deltaTotal },
-            supplierDue: { increment: deltaDue },
-            currentCash: { decrement: deltaPaid } // if paid more, cash decreases
-          }
-        });
-      }
-
+      await updateMetrics(userId, {
+        purchaseChange: parsed.data.totalAmount - existing.totalAmount,
+        supplierDueChange: dueAmount - existing.dueAmount,
+        cashChange: -paidDelta,
+      }, tx);
+      await tx.activityLog.create({
+        data: { ownerId: userId, userId, action: 'UPDATED_PURCHASE', entity: 'Purchase', entityId: existing.id, newValue: JSON.stringify(updatedPurchase) },
+      });
       return updatedPurchase;
-    }, { maxWait: 10000, timeout: 30000 });
+    }, { maxWait: 10_000, timeout: 30_000 });
 
-    return NextResponse.json(result);
-  } catch (error: any) {
-    console.error("Error updating purchase:", error);
-    return NextResponse.json({ error: error.message || 'Failed to update purchase' }, { status: 500 });
+    return NextResponse.json(updated);
+  } catch (error) {
+    return apiErrorResponse(error, 'Failed to update purchase');
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(_request: NextRequest, { params }: RouteContext) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
-    const { userId } = await auth();
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const id = (await params).id;
+    if (!recordIdSchema.safeParse(id).success) return NextResponse.json({ error: 'Invalid purchase id' }, { status: 400 });
 
-    const { id } = await params;
+    const deleted = await prisma.$transaction(async (tx) => {
+      const existing = await tx.purchase.findFirst({ where: { id, ownerId: userId } });
+      if (!existing) throw new ApiError('Purchase not found', 404);
 
-    const existingPurchase = await prisma.purchase.findUnique({
-      where: { id },
-    });
-
-    if (!existingPurchase) {
-      return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Revert Metrics
-      const metrics = await tx.businessMetrics.findFirst();
-      if (metrics) {
-        await tx.businessMetrics.update({
-          where: { id: metrics.id },
-          data: {
-            totalPurchase: { decrement: existingPurchase.totalAmount },
-            supplierDue: { decrement: existingPurchase.dueAmount },
-            currentCash: { increment: existingPurchase.paidAmount } // return cash
-          }
+      for (const item of existing.items) {
+        const product = await tx.product.findFirst({
+          where: { ownerId: userId, name: { equals: item.productName, mode: 'insensitive' } },
         });
-      }
-
-      // 2. Revert Product Stock for items
-      const items = existingPurchase.items as any[];
-      if (items && Array.isArray(items)) {
-        for (const item of items) {
-          const qty = Number(item.quantity) || 0;
-          if (qty > 0 && item.productName) {
-            // Find product by exact name match (as saved during creation)
-            const product = await tx.product.findFirst({
-              where: { name: { equals: String(item.productName), mode: 'insensitive' } }
-            });
-            if (product) {
-              await tx.product.update({
-                where: { id: product.id },
-                data: {
-                  // @ts-ignore
-                  stockQuantity: { decrement: qty }
-                }
-              });
-            }
-          }
+        if (product) {
+          await tx.product.update({ where: { id: product.id }, data: { stockQuantity: { decrement: item.quantity } } });
         }
       }
 
-      // 3. Delete Price History linked to this purchase
-      // @ts-ignore
-      await tx.productPriceHistory.deleteMany({
-        where: { purchaseId: id }
-      });
-
-      // 4. Delete Payments linked to this purchase
-      await tx.supplierPayment.deleteMany({
-        where: { purchaseId: id }
-      });
-
-      // 5. Delete the Purchase
-      const deletedPurchase = await tx.purchase.delete({
-        where: { id }
-      });
-
-      // Log deletion
+      await tx.productPriceHistory.deleteMany({ where: { ownerId: userId, purchaseId: existing.id } });
+      await tx.supplierPayment.deleteMany({ where: { ownerId: userId, purchaseId: existing.id } });
+      const removed = await tx.purchase.delete({ where: { id: existing.id } });
+      await updateMetrics(userId, {
+        purchaseChange: -existing.totalAmount,
+        supplierDueChange: -existing.dueAmount,
+        cashChange: existing.paidAmount,
+      }, tx);
       await tx.activityLog.create({
-        data: {
-          userId,
-          action: 'DELETED_PURCHASE',
-          entity: 'Purchase',
-          entityId: id,
-        }
+        data: { ownerId: userId, userId, action: 'DELETED_PURCHASE', entity: 'Purchase', entityId: existing.id },
       });
+      return removed;
+    }, { maxWait: 10_000, timeout: 30_000 });
 
-      return deletedPurchase;
-    }, { maxWait: 10000, timeout: 30000 });
-
-    return NextResponse.json({ success: true, purchase: result });
-  } catch (error: any) {
-    console.error("Error deleting purchase:", error);
-    return NextResponse.json({ error: error.message || 'Failed to delete purchase' }, { status: 500 });
+    return NextResponse.json({ success: true, purchase: deleted });
+  } catch (error) {
+    return apiErrorResponse(error, 'Failed to delete purchase');
   }
 }

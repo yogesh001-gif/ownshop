@@ -25,7 +25,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "OwnShop - Business Management",
-  description: "A Progressive Web App (PWA) built for offline retail shopkeepers.",
+  description: "A secure Progressive Web App for retail business management.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

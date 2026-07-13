@@ -15,9 +15,18 @@ const customerSchema = z.object({
 });
 
 type CustomerForm = z.infer<typeof customerSchema>;
+type CustomerSummary = { id: string; name: string; phone: string; address: string | null; createdAt: string };
+
+function isCustomerSummary(value: unknown): value is CustomerSummary {
+  return typeof value === 'object' && value !== null &&
+    typeof (value as CustomerSummary).id === 'string' &&
+    typeof (value as CustomerSummary).name === 'string' &&
+    typeof (value as CustomerSummary).phone === 'string' &&
+    typeof (value as CustomerSummary).createdAt === 'string';
+}
 
 export default function Customers() {
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
@@ -28,14 +37,20 @@ export default function Customers() {
 
   const fetchCustomers = async (searchQuery = '') => {
     setLoading(true);
-    const res = await fetch(`/api/customers${searchQuery ? `?search=${searchQuery}` : ''}`);
-    const data = await res.json();
-    setCustomers(Array.isArray(data) ? data : []);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/customers${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''}`);
+      const data: unknown = await res.json();
+      setCustomers(Array.isArray(data) ? data.filter(isCustomerSummary) : []);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchCustomers();
+    const loadCustomers = async () => {
+      await fetchCustomers();
+    };
+    void loadCustomers();
   }, []);
 
   const onSubmit = async (data: CustomerForm) => {

@@ -1,23 +1,41 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, IndianRupee, Scale } from 'lucide-react';
+import { BarChart3, TrendingUp, IndianRupee } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+type ReportData = {
+  rangeSales: number;
+  rangePurchase: number;
+  rangeProfit: number;
+  customerDue: number;
+  supplierDue: number;
+  currentCash: number;
+};
+
+function isReportData(value: unknown): value is ReportData {
+  return typeof value === 'object' && value !== null &&
+    ['rangeSales', 'rangePurchase', 'rangeProfit', 'customerDue', 'supplierDue', 'currentCash']
+      .every((key) => typeof (value as Record<string, unknown>)[key] === 'number');
+}
+
 export default function Reports() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState('today');
 
   useEffect(() => {
-    setLoading(true);
-    fetch(`/api/reports?range=${range}`)
-      .then(res => res.json())
-      .then(d => {
-        setData(d);
+    const loadReport = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/reports?range=${range}`);
+        const responseData: unknown = await response.json();
+        setData(isReportData(responseData) ? responseData : null);
+      } finally {
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      }
+    };
+    void loadReport();
   }, [range]);
 
   const ranges = [

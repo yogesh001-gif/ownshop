@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useState } from 'react';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Trash2, Receipt, Search } from 'lucide-react';
+import { Plus, Trash2, Receipt } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 
 const billItemSchema = z.object({
   productName: z.string().min(1, "Product name is required"),
@@ -25,10 +26,11 @@ const billSchema = z.object({
 type BillForm = z.infer<typeof billSchema>;
 
 export default function Billing() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const { register, control, handleSubmit, watch, reset, formState: { errors } } = useForm<BillForm>({
+  const { register, control, handleSubmit, reset, formState: { errors } } = useForm<BillForm>({
     resolver: zodResolver(billSchema),
     defaultValues: {
       items: [{ productName: '', quantity: 1, rate: 0, wholesaleRate: undefined }],
@@ -39,9 +41,9 @@ export default function Billing() {
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
 
-  const watchItems = watch("items");
-  const watchDiscount = watch("discount") || 0;
-  const watchPaid = watch("paidAmount") || 0;
+  const watchItems = useWatch({ control, name: 'items' }) ?? [];
+  const watchDiscount = useWatch({ control, name: 'discount' }) ?? 0;
+  const watchPaid = useWatch({ control, name: 'paidAmount' }) ?? 0;
 
   const totalAmount = watchItems.reduce((acc, item) => acc + ((item.quantity || 0) * (item.rate || 0)), 0);
   const dueAmount = totalAmount - watchDiscount - watchPaid;
@@ -66,10 +68,10 @@ export default function Billing() {
     });
 
     if (res.ok) {
-      const data = await res.json();
+      const data = await res.json() as { id: string };
       setSuccess(true);
       reset();
-      window.location.href = `/invoice/${data.id}`;
+      router.push(`/invoice/${data.id}`);
     } else {
       alert("Failed to create bill.");
     }

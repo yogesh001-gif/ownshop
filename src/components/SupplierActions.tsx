@@ -2,8 +2,11 @@
 
 import { useState } from 'react';
 import { Edit2, Trash2, X, AlertTriangle } from 'lucide-react';
+import type { Supplier } from '@prisma/client';
 
-export default function SupplierActions({ supplier }: { supplier: any }) {
+type SupplierActionsProps = { supplier: Pick<Supplier, 'id' | 'name' | 'phone' | 'address'> };
+
+export default function SupplierActions({ supplier }: SupplierActionsProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -25,8 +28,8 @@ export default function SupplierActions({ supplier }: { supplier: any }) {
       });
       if (!res.ok) throw new Error(await res.text());
       window.location.reload();
-    } catch (err: any) {
-      alert(`Error updating supplier: ${err.message}`);
+    } catch (error) {
+      alert(`Error updating supplier: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setLoading(false);
     }
   };
@@ -37,13 +40,10 @@ export default function SupplierActions({ supplier }: { supplier: any }) {
       const res = await fetch(`/api/suppliers/${supplier.id}`, {
         method: 'DELETE'
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to delete');
-      }
+      if (!res.ok) throw new Error('Failed to delete supplier');
       window.location.href = '/suppliers';
-    } catch (err: any) {
-      alert(`Error deleting supplier: ${err.message}`);
+    } catch (error) {
+      alert(`Error deleting supplier: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setLoading(false);
       setIsDeleteModalOpen(false);
     }

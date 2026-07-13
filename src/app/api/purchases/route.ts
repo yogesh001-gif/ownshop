@@ -1,135 +1,117 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
+import prisma from '@/lib/prisma';
+import { ApiError, apiErrorResponse } from '@/lib/api-error';
 import { updateMetrics } from '@/lib/metrics';
+import { createPurchaseSchema, validationError } from '@/lib/validation';
 
-export async function GET(request: Request) {
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
-    const { userId } = await auth();
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
     const purchases = await prisma.purchase.findMany({
+      where: { ownerId: userId },
       include: { supplier: true },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
-
     return NextResponse.json(purchases);
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch purchases' }, { status: 500 });
+    return apiErrorResponse(error, 'Failed to fetch purchases');
   }
 }
 
 export async function POST(request: Request) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
-    const { userId } = await auth();
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const body = await request.json();
-    const { supplierId, items, totalAmount, paidAmount } = body;
-
-    if (!supplierId || !items || items.length === 0) {
-      return NextResponse.json({ error: 'Supplier and items are required' }, { status: 400 });
+    const parsed = createPurchaseSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid purchase', details: validationError(parsed.error) }, { status: 400 });
     }
 
-    const totalAmt = Number(totalAmount) || 0;
-    const paidAmt = Number(paidAmount) || 0;
-    const dueAmt = totalAmt - paidAmt;
+    const data = parsed.data;
+    const totalAmount = data.items.reduce((sum, item) => sum + item.quantity * item.rate, 0);
+    const dueAmount = totalAmount - data.paidAmount;
 
-    // 1 & 2. Create Purchase and update Products inside a transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Create Purchase
-      const purchase = await tx.purchase.create({
+    const purchase = await prisma.$transaction(async (tx) => {
+      const supplier = await tx.supplier.findFirst({ where: { id: data.supplierId, ownerId: userId } });
+      if (!supplier) throw new ApiError('Supplier not found', 404);
+
+      const created = await tx.purchase.create({
         data: {
-          supplierId,
-          items,
-          totalAmount: totalAmt,
-          paidAmount: paidAmt,
-          dueAmount: dueAmt,
-        }
+          ownerId: userId,
+          supplierId: supplier.id,
+          date: data.date ?? new Date(),
+          items: data.items.map((item) => ({
+            productName: item.productName,
+            quantity: item.quantity,
+            rate: item.rate,
+            total: item.quantity * item.rate,
+          })),
+          totalAmount,
+          paidAmount: data.paidAmount,
+          dueAmount,
+        },
       });
 
-      // Create Payment Record if paid
-      if (paidAmt > 0) {
+      if (data.paidAmount > 0) {
         await tx.supplierPayment.create({
-          data: {
-            amount: paidAmt,
-            supplierId,
-            purchaseId: purchase.id,
-          }
+          data: { ownerId: userId, amount: data.paidAmount, supplierId: supplier.id, purchaseId: created.id },
         });
       }
 
-      // Update Products, Inventory, and Price History
-      for (const item of (items || [])) {
-        const qty = Math.max(1, Math.round(Number(item.quantity) || 1));
-        const rt = Number(item.rate) || 0;
-        const pName = String(item.productName || 'Unknown Product').trim();
-
+      for (const item of data.items) {
         let product = await tx.product.findFirst({
-          where: { name: { equals: pName, mode: 'insensitive' } }
+          where: { ownerId: userId, name: { equals: item.productName, mode: 'insensitive' } },
         });
 
         if (!product) {
           product = await tx.product.create({
             data: {
-              name: pName,
-              // @ts-ignore
-              currentPurchasePrice: rt,
-              // @ts-ignore
-              stockQuantity: qty
-            }
+              ownerId: userId,
+              name: item.productName,
+              currentPurchasePrice: item.rate,
+              stockQuantity: item.quantity,
+            },
           });
         } else {
-          await tx.product.update({
+          product = await tx.product.update({
             where: { id: product.id },
             data: {
-              // @ts-ignore
-              currentPurchasePrice: rt,
-              // @ts-ignore
-              stockQuantity: { increment: qty }
-            }
+              currentPurchasePrice: item.rate,
+              stockQuantity: { increment: item.quantity },
+            },
           });
         }
 
-        // Log the price history
-        // @ts-ignore
         await tx.productPriceHistory.create({
-          data: {
-            productId: product.id,
-            purchaseId: purchase.id,
-            price: rt,
-          }
+          data: { ownerId: userId, productId: product.id, purchaseId: created.id, price: item.rate },
         });
       }
-      
-      return purchase;
-    }, {
-      maxWait: 10000,
-      timeout: 30000
-    });
 
-    // 4. Update Metrics
-    await updateMetrics({
-      purchaseChange: totalAmt,
-      cashChange: -paidAmt,
-      supplierDueChange: dueAmt,
-    });
+      await updateMetrics(userId, {
+        purchaseChange: totalAmount,
+        cashChange: -data.paidAmount,
+        supplierDueChange: dueAmount,
+      }, tx);
+      await tx.activityLog.create({
+        data: {
+          ownerId: userId,
+          userId,
+          action: 'CREATED_PURCHASE',
+          entity: 'Purchase',
+          entityId: created.id,
+          newValue: JSON.stringify(created),
+        },
+      });
+      return created;
+    }, { maxWait: 10_000, timeout: 30_000 });
 
-    // 5. Log Activity
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'CREATED_PURCHASE',
-        entity: 'Purchase',
-        entityId: result.id,
-        newValue: JSON.stringify(result),
-      }
-    });
-
-    return NextResponse.json(result, { status: 201 });
-  } catch (error: any) {
-    console.error("Purchase Error:", error);
-    return NextResponse.json({ error: error.message || 'Failed to create purchase' }, { status: 500 });
+    return NextResponse.json(purchase, { status: 201 });
+  } catch (error) {
+    return apiErrorResponse(error, 'Failed to create purchase');
   }
 }

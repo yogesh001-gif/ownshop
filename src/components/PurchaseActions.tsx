@@ -2,8 +2,11 @@
 
 import { useState } from 'react';
 import { Edit2, Trash2, X, AlertTriangle } from 'lucide-react';
+import type { Purchase } from '@prisma/client';
 
-export default function PurchaseActions({ purchase }: { purchase: any }) {
+type PurchaseActionsProps = { purchase: Pick<Purchase, 'id' | 'supplierId' | 'totalAmount' | 'paidAmount' | 'date'> };
+
+export default function PurchaseActions({ purchase }: PurchaseActionsProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -29,8 +32,8 @@ export default function PurchaseActions({ purchase }: { purchase: any }) {
       });
       if (!res.ok) throw new Error(await res.text());
       window.location.reload();
-    } catch (err: any) {
-      alert(`Error updating purchase: ${err.message}`);
+    } catch (error) {
+      alert(`Error updating purchase: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setLoading(false);
     }
   };
@@ -41,13 +44,10 @@ export default function PurchaseActions({ purchase }: { purchase: any }) {
       const res = await fetch(`/api/purchases/${purchase.id}`, {
         method: 'DELETE'
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to delete');
-      }
+      if (!res.ok) throw new Error('Failed to delete purchase');
       window.location.href = `/suppliers/${purchase.supplierId}`;
-    } catch (err: any) {
-      alert(`Error deleting purchase: ${err.message}`);
+    } catch (error) {
+      alert(`Error deleting purchase: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setLoading(false);
       setIsDeleteModalOpen(false);
     }

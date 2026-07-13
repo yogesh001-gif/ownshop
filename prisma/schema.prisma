@@ -21,39 +21,49 @@ enum Role {
 
 model Customer {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId   String
   name      String
-  phone     String   @unique
+  phone     String
   address   String?
   bills     Bill[]
   payments  CustomerPayment[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, phone])
 }
 
 model Supplier {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId   String
   name      String
-  phone     String   @unique
+  phone     String
   address   String?
   purchases Purchase[]
   payments  SupplierPayment[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, phone])
 }
 
 model Product {
   id                   String   @id @default(auto()) @map("_id") @db.ObjectId
-  name                 String   @unique
+  ownerId              String
+  name                 String
   currentPurchasePrice Float    @default(0)
   currentSellingPrice  Float    @default(0)
   stockQuantity        Int      @default(0)
   priceHistory         ProductPriceHistory[]
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+
+  @@unique([ownerId, name])
 }
 
 model ProductPriceHistory {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId    String
   productId  String   @db.ObjectId
   product    Product  @relation(fields: [productId], references: [id])
   price      Float
@@ -64,7 +74,8 @@ model ProductPriceHistory {
 
 model Bill {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  invoiceNumber String   @unique
+  ownerId       String
+  invoiceNumber String
   date          DateTime @default(now())
   customerId    String   @db.ObjectId
   customer      Customer @relation(fields: [customerId], references: [id])
@@ -78,6 +89,8 @@ model Bill {
   payments      CustomerPayment[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  @@unique([ownerId, invoiceNumber])
 }
 
 type BillItem {
@@ -97,6 +110,7 @@ enum BillStatus {
 
 model Purchase {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId       String
   date          DateTime @default(now())
   supplierId    String   @db.ObjectId
   supplier      Supplier @relation(fields: [supplierId], references: [id])
@@ -105,6 +119,7 @@ model Purchase {
   paidAmount      Float
   dueAmount       Float
   invoiceImageUrl String?
+  supplierInvoiceNumber String?
   confidenceScore Float?
   payments        SupplierPayment[]
   createdAt       DateTime @default(now())
@@ -120,6 +135,7 @@ type PurchaseItem {
 
 model CustomerPayment {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId   String
   date      DateTime @default(now())
   amount    Float
   customerId String  @db.ObjectId
@@ -132,6 +148,7 @@ model CustomerPayment {
 
 model SupplierPayment {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId    String
   date       DateTime @default(now())
   amount     Float
   supplierId String   @db.ObjectId
@@ -145,6 +162,7 @@ model SupplierPayment {
 model ActivityLog {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   date      DateTime @default(now())
+  ownerId   String
   userId    String
   action    String
   entity    String
@@ -156,6 +174,7 @@ model ActivityLog {
 
 model BusinessMetrics {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId      String   @unique
   totalSales   Float    @default(0)
   totalPurchase Float   @default(0)
   totalProfit  Float    @default(0)
@@ -168,6 +187,7 @@ model BusinessMetrics {
 
 model WholesaleRecord {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId       String
   date          DateTime @default(now())
   productName   String
   quantity      Int
@@ -176,4 +196,14 @@ model WholesaleRecord {
   billId        String?  @db.ObjectId
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model InvoiceCounter {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId    String
+  year       Int
+  nextNumber Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([ownerId, year])
 }

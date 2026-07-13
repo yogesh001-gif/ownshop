@@ -11,8 +11,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
-  const bill = await prisma.bill.findUnique({
-    where: { id },
+  const bill = await prisma.bill.findFirst({
+    where: { id, ownerId: userId },
     include: { customer: true }
   });
 
@@ -76,7 +76,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {bill.items.map((item: any, idx: number) => (
+              {bill.items.map((item, idx) => (
                 <tr key={idx} className="bg-white">
                   <td className="py-4 px-6 text-gray-900 font-medium">{item.productName}</td>
                   <td className="py-4 px-6 text-gray-600 text-right">{item.quantity}</td>
